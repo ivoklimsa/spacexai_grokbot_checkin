@@ -15,6 +15,9 @@ const syne = Syne({
 export const metadata: Metadata = {
   title: "SpaceXAi Check-in",
   description: "Fullscreen floating grokbot arrivals board for SpaceXAi event check-ins.",
+  icons: {
+    icon: [{ url: "/icon.png", type: "image/png" }],
+  },
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
