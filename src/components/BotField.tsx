@@ -6,7 +6,8 @@ import { createBody, stepPhysics, type PhysicsBody } from "@/lib/physics";
 import type { Bot } from "@/lib/types";
 
 const AVATAR_SIZE = 92;
-const HIT_RADIUS = 52;
+const HIT_RADIUS = 48;
+const LABEL_CLEARANCE = 28;
 
 type Props = {
   initialBots?: Bot[];
@@ -46,7 +47,7 @@ export function BotField({ initialBots = [] }: Props) {
     const width = rect?.width ?? window.innerWidth;
     const height = rect?.height ?? window.innerHeight;
     // Leave room for the name label under the avatar.
-    const usableHeight = Math.max(HIT_RADIUS * 2, height - 36);
+    const usableHeight = Math.max(HIT_RADIUS * 2, height - LABEL_CLEARANCE);
     const body = createBody(
       id,
       width,
@@ -136,7 +137,7 @@ export function BotField({ initialBots = [] }: Props) {
       const rect = stageRef.current?.getBoundingClientRect();
       const width = rect?.width ?? window.innerWidth;
       const height = rect?.height ?? window.innerHeight;
-      const usableHeight = Math.max(HIT_RADIUS * 2, height - 36);
+      const usableHeight = Math.max(HIT_RADIUS * 2, height - LABEL_CLEARANCE);
 
       const bodies = Array.from(bodiesRef.current.values());
       stepPhysics(bodies, width, usableHeight, dt);
@@ -155,7 +156,7 @@ export function BotField({ initialBots = [] }: Props) {
     const onResize = () => {
       const rect = stageRef.current?.getBoundingClientRect();
       if (!rect) return;
-      const usableHeight = Math.max(HIT_RADIUS * 2, rect.height - 36);
+      const usableHeight = Math.max(HIT_RADIUS * 2, rect.height - LABEL_CLEARANCE);
       for (const body of bodiesRef.current.values()) {
         body.x = Math.min(Math.max(body.radius, body.x), rect.width - body.radius);
         body.y = Math.min(
@@ -182,10 +183,12 @@ export function BotField({ initialBots = [] }: Props) {
         return (
           <div
             key={bot.id}
-            className="pointer-events-none absolute flex w-[120px] -translate-x-1/2 -translate-y-1/2 flex-col items-center"
+            className="pointer-events-none absolute"
             style={{
               left: body.x,
               top: body.y,
+              width: AVATAR_SIZE,
+              height: AVATAR_SIZE,
               transform: `translate(-50%, -50%) scale(${0.72 + scale * 0.28})`,
               opacity,
               willChange: "transform, left, top",
@@ -196,11 +199,11 @@ export function BotField({ initialBots = [] }: Props) {
               alt=""
               width={AVATAR_SIZE}
               height={AVATAR_SIZE}
-              className="h-[92px] w-[92px] object-contain drop-shadow-[0_10px_24px_rgba(0,0,0,0.35)]"
+              className="h-full w-full object-contain drop-shadow-[0_10px_24px_rgba(0,0,0,0.35)]"
               priority={false}
               unoptimized
             />
-            <span className="mt-1 max-w-[118px] truncate text-center text-[13px] font-medium tracking-wide text-white/90 [text-shadow:0_1px_8px_rgba(0,0,0,0.85)]">
+            <span className="absolute left-1/2 top-[calc(100%+2px)] w-[120px] -translate-x-1/2 truncate text-center text-[13px] font-medium tracking-wide text-white/90 [text-shadow:0_1px_8px_rgba(0,0,0,0.85)]">
               {bot.name}
             </span>
           </div>
