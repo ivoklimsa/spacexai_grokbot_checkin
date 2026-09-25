@@ -146,42 +146,46 @@ export function stepPhysics(
     }
   }
 
-  for (let i = 0; i < bodies.length; i++) {
-    for (let j = i + 1; j < bodies.length; j++) {
-      const a = bodies[i];
-      const b = bodies[j];
-      const dx = b.x - a.x;
-      const dy = b.y - a.y;
-      const dist = Math.hypot(dx, dy) || 0.0001;
-      const minDist = a.radius + b.radius;
+  // Multiple passes keep dense crowds from remaining stacked.
+  for (let pass = 0; pass < 3; pass++) {
+    for (let i = 0; i < bodies.length; i++) {
+      for (let j = i + 1; j < bodies.length; j++) {
+        const a = bodies[i];
+        const b = bodies[j];
+        const dx = b.x - a.x;
+        const dy = b.y - a.y;
+        const dist = Math.hypot(dx, dy) || 0.0001;
+        const minDist = a.radius + b.radius;
 
-      if (dist >= minDist) continue;
+        if (dist >= minDist) continue;
 
-      const nx = dx / dist;
-      const ny = dy / dist;
+        const nx = dx / dist;
+        const ny = dy / dist;
 
-      // Separate overlapping circles.
-      const overlap = minDist - dist;
-      const half = overlap / 2;
-      a.x -= nx * half;
-      a.y -= ny * half;
-      b.x += nx * half;
-      b.y += ny * half;
+        // Separate overlapping circles.
+        const overlap = minDist - dist;
+        const half = overlap / 2 + 0.5;
+        a.x -= nx * half;
+        a.y -= ny * half;
+        b.x += nx * half;
+        b.y += ny * half;
 
-      // Elastic bump along contact normal.
-      const dvx = a.vx - b.vx;
-      const dvy = a.vy - b.vy;
-      const rel = dvx * nx + dvy * ny;
-      if (rel > 0) continue;
+        // Elastic bump along contact normal (from a → b).
+        const dvx = a.vx - b.vx;
+        const dvy = a.vy - b.vy;
+        const velAlongNormal = dvx * nx + dvy * ny;
+        // Positive means already separating.
+        if (velAlongNormal > 0) continue;
 
-      const impulse = rel;
-      a.vx -= impulse * nx;
-      a.vy -= impulse * ny;
-      b.vx += impulse * nx;
-      b.vy += impulse * ny;
+        const impulse = -velAlongNormal;
+        a.vx -= impulse * nx;
+        a.vy -= impulse * ny;
+        b.vx += impulse * nx;
+        b.vy += impulse * ny;
 
-      clampSpeed(a);
-      clampSpeed(b);
+        clampSpeed(a);
+        clampSpeed(b);
+      }
     }
   }
 }

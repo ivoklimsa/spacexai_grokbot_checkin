@@ -6,7 +6,7 @@ import { createBody, stepPhysics, type PhysicsBody } from "@/lib/physics";
 import type { Bot } from "@/lib/types";
 
 const AVATAR_SIZE = 92;
-const HIT_RADIUS = 46;
+const HIT_RADIUS = 52;
 
 type Props = {
   initialBots?: Bot[];
