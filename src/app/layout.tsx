@@ -1,0 +1,31 @@
+import type { Metadata } from "next";
+import { Sora, Syne } from "next/font/google";
+import "./globals.css";
+
+const sora = Sora({
+  variable: "--font-body",
+  subsets: ["latin"],
+});
+
+const syne = Syne({
+  variable: "--font-display",
+  subsets: ["latin"],
+});
+
+export const metadata: Metadata = {
+  title: "Grokbot Check-in",
+  description: "Fullscreen floating grokbot arrivals board for live event check-ins.",
+};
+
+export default function RootLayout({ children }: LayoutProps<"/">) {
+  return (
+    <html
+      lang="en"
+      className={`${sora.variable} ${syne.variable} h-full antialiased`}
+    >
+      <body className="min-h-full overflow-hidden bg-[#07090f] font-[family-name:var(--font-body)] text-white">
+        {children}
+      </body>
+    </html>
+  );
+}
