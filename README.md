@@ -14,6 +14,11 @@ Open [http://localhost:3000](http://localhost:3000).
 - Click **+ Spawn** (or press `S` / `/`) to add bots in demo mode.
 - Use `?demo=0` for a clean kiosk: [http://localhost:3000/?demo=0](http://localhost:3000/?demo=0).
 
+## Live
+
+Production: [https://spacexai-checkin.vercel.app](https://spacexai-checkin.vercel.app)  
+Project: `spacexai-grokbot-checkin` on team **Ivo's playground**
+
 ## How it works
 
 ```
