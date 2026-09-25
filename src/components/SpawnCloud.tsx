@@ -34,24 +34,6 @@ export function SpawnCloud({ appear, fadeOut, pulse }: Props) {
         <ellipse cx="55" cy="30" rx="24" ry="18" fill="rgba(255,255,255,0.97)" />
         <ellipse cx="30" cy="38" rx="16" ry="12" fill="rgba(255,255,255,0.88)" />
       </svg>
-
-      {/* Tiny puff sparks */}
-      {[0, 1, 2, 3].map((i) => {
-        const angle = (i / 4) * Math.PI * 2 + appear * 0.8;
-        const dist = 28 + appear * 22 + pulse * 6;
-        const x = Math.cos(angle) * dist;
-        const y = Math.sin(angle) * dist * 0.7;
-        return (
-          <span
-            key={i}
-            className="absolute left-1/2 top-1/2 h-2 w-2 -translate-x-1/2 -translate-y-1/2 rounded-full bg-white/80"
-            style={{
-              transform: `translate(calc(-50% + ${x}px), calc(-50% + ${y}px)) scale(${0.4 + appear * 0.8})`,
-              opacity: Math.max(0, appear * 0.9 * (1 - fadeOut)),
-            }}
-          />
-        );
-      })}
     </div>
   );
 }
