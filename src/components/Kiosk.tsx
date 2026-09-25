@@ -19,22 +19,24 @@ export function Kiosk() {
       <div className="stage-glow pointer-events-none absolute inset-0" />
       <div className="stage-grain pointer-events-none absolute inset-0 opacity-[0.35]" />
 
-      <div className="pointer-events-none absolute left-5 top-5 z-30 flex flex-col items-start gap-1">
+      <div className="pointer-events-none absolute left-5 top-5 z-30 flex items-center gap-3">
         <Image
           src="/brand/spacexai-logo.png"
           alt="SpaceXAi"
-          width={420}
-          height={160}
+          width={96}
+          height={96}
           priority
           unoptimized
-          className="h-auto w-[min(48vw,240px)] object-contain object-left drop-shadow-[0_2px_18px_rgba(0,0,0,0.45)] sm:w-[min(40vw,280px)]"
+          className="h-12 w-12 object-contain drop-shadow-[0_2px_14px_rgba(0,0,0,0.5)] sm:h-14 sm:w-14"
         />
-        <p className="font-[family-name:var(--font-display)] text-[1.15rem] font-semibold tracking-[-0.02em] text-white/90 sm:text-[1.35rem]">
-          Check-in
-        </p>
-        <p className="text-[11px] uppercase tracking-[0.22em] text-white/35">
-          Live arrivals
-        </p>
+        <div className="flex flex-col items-start leading-tight">
+          <p className="font-[family-name:var(--font-display)] text-[1.2rem] font-semibold tracking-[-0.02em] text-white/95 sm:text-[1.4rem]">
+            SpaceXAi Check-in
+          </p>
+          <p className="mt-0.5 text-[11px] uppercase tracking-[0.22em] text-white/35">
+            Live arrivals
+          </p>
+        </div>
       </div>
 
       <BotField />
