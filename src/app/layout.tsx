@@ -13,8 +13,8 @@ const syne = Syne({
 });
 
 export const metadata: Metadata = {
-  title: "Grokbot Check-in",
-  description: "Fullscreen floating grokbot arrivals board for live event check-ins.",
+  title: "SpaceXAi Check-in",
+  description: "Fullscreen floating grokbot arrivals board for SpaceXAi event check-ins.",
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {

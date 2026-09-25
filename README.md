@@ -1,4 +1,4 @@
-# Grokbot Check-in Display
+# SpaceXAi Check-in Display
 
 Fullscreen venue kiosk that spawns floating grokbot avatars when people check in. Each bot shows a random avatar above the person's name, drifts around the screen, and bumps away on contact instead of overlapping.
 
