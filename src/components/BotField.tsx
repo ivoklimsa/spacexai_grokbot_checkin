@@ -3,6 +3,13 @@
 import Image from "next/image";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { SpawnCloud } from "@/components/SpawnCloud";
+import {
+  clearPersistedBots,
+  loadBots,
+  mergeBots,
+  saveBots,
+  upsertPersistedBot,
+} from "@/lib/bot-persistence";
 import { createBody, stepPhysics, type PhysicsBody } from "@/lib/physics";
 import type { Bot } from "@/lib/types";
 
@@ -82,16 +89,38 @@ export function BotField({ initialBots = [] }: Props) {
     bodiesRef.current.set(id, body);
   };
 
+  const applyBotList = (next: Bot[], options?: { animateNew?: boolean }) => {
+    const animateNew = options?.animateNew ?? false;
+    const prevIds = new Set(botsRef.current.keys());
+    setBots(next);
+    saveBots(next);
+    for (const bot of next) {
+      const isNew = !prevIds.has(bot.id) && !bodiesRef.current.has(bot.id);
+      ensureBody(bot.id, { animate: animateNew && isNew });
+    }
+    const alive = new Set(next.map((b) => b.id));
+    for (const id of bodiesRef.current.keys()) {
+      if (!alive.has(id)) bodiesRef.current.delete(id);
+    }
+  };
+
   const upsertBot = (bot: Bot) => {
+    upsertPersistedBot(bot);
     setBots((prev) => {
       if (prev.some((b) => b.id === bot.id)) return prev;
-      return [...prev, bot];
+      const next = [...prev, bot];
+      saveBots(next);
+      return next;
     });
     ensureBody(bot.id, { animate: true });
   };
 
+  // Restore from localStorage first so a stuck/refreshed browser keeps groks.
   useEffect(() => {
-    for (const bot of bots) ensureBody(bot.id, { animate: false });
+    const persisted = loadBots();
+    if (persisted.length === 0) return;
+    setBots(persisted);
+    for (const bot of persisted) ensureBody(bot.id, { animate: false });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -99,6 +128,11 @@ export function BotField({ initialBots = [] }: Props) {
     let cancelled = false;
     let source: EventSource | null = null;
     let retryTimer: ReturnType<typeof setTimeout> | null = null;
+
+    const mergeIncoming = (incoming: Bot[]) => {
+      const merged = mergeBots(loadBots(), incoming);
+      applyBotList(merged, { animateNew: false });
+    };
 
     const connect = () => {
       source = new EventSource("/api/bots/stream");
@@ -108,15 +142,11 @@ export function BotField({ initialBots = [] }: Props) {
         try {
           const data = JSON.parse(message.data) as StreamPayload;
           if (data.type === "hello") {
-            setBots(data.bots);
-            for (const bot of data.bots) ensureBody(bot.id, { animate: false });
-            const alive = new Set(data.bots.map((b) => b.id));
-            for (const id of bodiesRef.current.keys()) {
-              if (!alive.has(id)) bodiesRef.current.delete(id);
-            }
+            mergeIncoming(data.bots);
           } else if (data.type === "spawn") {
             upsertBot(data.bot);
           } else if (data.type === "reset") {
+            clearPersistedBots();
             setBots([]);
             bodiesRef.current.clear();
           }
@@ -136,8 +166,7 @@ export function BotField({ initialBots = [] }: Props) {
       .then((r) => r.json())
       .then((data: { bots?: Bot[] }) => {
         if (cancelled || !data.bots) return;
-        setBots(data.bots);
-        for (const bot of data.bots) ensureBody(bot.id, { animate: false });
+        mergeIncoming(data.bots);
       })
       .catch(() => undefined);
 

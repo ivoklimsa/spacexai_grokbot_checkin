@@ -58,6 +58,6 @@ Until `LUMA_WEBHOOK_SECRET` is set, the webhook returns `503` and demo spawn rem
 
 ## Notes
 
-- Bot state is **in-memory** (resets on server restart / cold start). Fine for a live event session.
+- Bot list is persisted in the browser via `localStorage` (`spacexai-checkin-bots`) so a refresh or stuck tab reload keeps spawned groks. Live SSE still uses the in-memory server store for multi-tab updates during a warm session.
 - Avatars live in `public/avatars/bot-01.png` … `bot-12.png`.
-- Deploy on Vercel when you want a public webhook URL for Luma.
+- Deploy only to the Vercel project **`spacexai-grokbot-checkin`**.
