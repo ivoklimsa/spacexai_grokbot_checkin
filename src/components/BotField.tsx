@@ -11,9 +11,9 @@ const HIT_RADIUS = 48;
 const LABEL_CLEARANCE = 28;
 
 /** Cloud pops in, holds, then crossfades into the grok avatar. */
-const CLOUD_IN_MS = 280;
-const CLOUD_HOLD_MS = 180;
-const REVEAL_MS = 420;
+const CLOUD_IN_MS = 420;
+const CLOUD_HOLD_MS = 320;
+const REVEAL_MS = 520;
 const INTRO_TOTAL_MS = CLOUD_IN_MS + CLOUD_HOLD_MS + REVEAL_MS;
 
 type Props = {
