@@ -39,18 +39,35 @@ type Props = {
   lockupRef?: RefObject<HTMLElement | null>;
 };
 
+/**
+ * Border box of the lockup plus every logo image and title line inside it.
+ * A flex wrapper can be smaller than overflowing title ink; the union keeps
+ * “Check-in” and “Live arrivals” inside the obstacle, not only the XA img.
+ */
 function readLockupExclusion(
   stage: DOMRect | undefined,
   lockup: HTMLElement | null | undefined,
 ): ExclusionRect | null {
   if (!stage || !lockup) return null;
-  const box = lockup.getBoundingClientRect();
-  if (box.width < 1 || box.height < 1) return null;
+  const nodes: Element[] = [lockup, ...lockup.querySelectorAll("img, p")];
+  let left = Infinity;
+  let top = Infinity;
+  let right = -Infinity;
+  let bottom = -Infinity;
+  for (const node of nodes) {
+    const box = node.getBoundingClientRect();
+    if (box.width < 1 || box.height < 1) continue;
+    left = Math.min(left, box.left);
+    top = Math.min(top, box.top);
+    right = Math.max(right, box.right);
+    bottom = Math.max(bottom, box.bottom);
+  }
+  if (!Number.isFinite(left) || right - left < 1 || bottom - top < 1) return null;
   return {
-    left: box.left - stage.left - LOCKUP_EXCLUSION_PAD,
-    top: box.top - stage.top - LOCKUP_EXCLUSION_PAD,
-    right: box.right - stage.left + LOCKUP_EXCLUSION_PAD,
-    bottom: box.bottom - stage.top + LOCKUP_EXCLUSION_PAD,
+    left: left - stage.left - LOCKUP_EXCLUSION_PAD,
+    top: top - stage.top - LOCKUP_EXCLUSION_PAD,
+    right: right - stage.left + LOCKUP_EXCLUSION_PAD,
+    bottom: bottom - stage.top + LOCKUP_EXCLUSION_PAD,
   };
 }
 

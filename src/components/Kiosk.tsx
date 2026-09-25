@@ -20,6 +20,7 @@ export function Kiosk({ demo = false }: Props) {
 
       <div
         ref={lockupRef}
+        data-brand-lockup=""
         className="pointer-events-none absolute left-5 top-5 z-30 flex items-center gap-3"
       >
         <Image
