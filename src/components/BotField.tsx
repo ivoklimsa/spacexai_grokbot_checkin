@@ -21,8 +21,8 @@ import type { Bot } from "@/lib/types";
 const AVATAR_SIZE = 92;
 const HIT_RADIUS = 48;
 const LABEL_CLEARANCE = 28;
-/** Logo layout box grows by this much on every side before physics treats it as solid. */
-const LOGO_EXCLUSION_PAD = 24;
+/** Header lockup box grows by this much on every side before physics treats it as solid. */
+const LOCKUP_EXCLUSION_PAD = 24;
 
 /** Cloud pops in, holds, then crossfades into the grok avatar. */
 const CLOUD_IN_MS = 420;
@@ -32,22 +32,25 @@ const INTRO_TOTAL_MS = CLOUD_IN_MS + CLOUD_HOLD_MS + REVEAL_MS;
 
 type Props = {
   initialBots?: Bot[];
-  /** Rendered SpaceXAi wordmark. Its layout box is the exclusion zone. */
-  logoRef?: RefObject<HTMLImageElement | null>;
+  /**
+   * Header brand lockup: logo image plus the adjacent Check-in title chrome.
+   * Its layout box (not the logo image alone) is the exclusion zone.
+   */
+  lockupRef?: RefObject<HTMLElement | null>;
 };
 
-function readLogoExclusion(
+function readLockupExclusion(
   stage: DOMRect | undefined,
-  logo: HTMLImageElement | null | undefined,
+  lockup: HTMLElement | null | undefined,
 ): ExclusionRect | null {
-  if (!stage || !logo) return null;
-  const box = logo.getBoundingClientRect();
+  if (!stage || !lockup) return null;
+  const box = lockup.getBoundingClientRect();
   if (box.width < 1 || box.height < 1) return null;
   return {
-    left: box.left - stage.left - LOGO_EXCLUSION_PAD,
-    top: box.top - stage.top - LOGO_EXCLUSION_PAD,
-    right: box.right - stage.left + LOGO_EXCLUSION_PAD,
-    bottom: box.bottom - stage.top + LOGO_EXCLUSION_PAD,
+    left: box.left - stage.left - LOCKUP_EXCLUSION_PAD,
+    top: box.top - stage.top - LOCKUP_EXCLUSION_PAD,
+    right: box.right - stage.left + LOCKUP_EXCLUSION_PAD,
+    bottom: box.bottom - stage.top + LOCKUP_EXCLUSION_PAD,
   };
 }
 
@@ -70,7 +73,7 @@ function easeOutCubic(t: number) {
   return 1 - Math.pow(1 - t, 3);
 }
 
-export function BotField({ initialBots = [], logoRef }: Props) {
+export function BotField({ initialBots = [], lockupRef }: Props) {
   const stageRef = useRef<HTMLDivElement>(null);
   const bodiesRef = useRef<Map<string, PhysicsBody>>(new Map());
   const botsRef = useRef<Map<string, Bot>>(new Map());
@@ -105,7 +108,7 @@ export function BotField({ initialBots = [], logoRef }: Props) {
       usableHeight,
       HIT_RADIUS,
       Array.from(bodiesRef.current.values()),
-      readLogoExclusion(rect, logoRef?.current),
+      readLockupExclusion(rect, lockupRef?.current),
     );
     // Hydrated bots skip the cloud intro.
     if (options?.animate === false) {
@@ -217,7 +220,7 @@ export function BotField({ initialBots = [], logoRef }: Props) {
       const usableHeight = Math.max(HIT_RADIUS * 2, height - LABEL_CLEARANCE);
 
       const bodies = Array.from(bodiesRef.current.values());
-      const exclusion = readLogoExclusion(rect, logoRef?.current);
+      const exclusion = readLockupExclusion(rect, lockupRef?.current);
       stepPhysics(bodies, width, usableHeight, dt, exclusion);
 
       setTick((n) => (n + 1) % 1_000_000);
@@ -228,7 +231,7 @@ export function BotField({ initialBots = [], logoRef }: Props) {
     return () => {
       if (rafRef.current) cancelAnimationFrame(rafRef.current);
     };
-  }, [logoRef]);
+  }, [lockupRef]);
 
   useEffect(() => {
     const onResize = () => {
@@ -243,18 +246,18 @@ export function BotField({ initialBots = [], logoRef }: Props) {
           usableHeight - body.radius,
         );
       }
-      // Re-measure the logo and bounce anyone the new box now covers.
+      // Re-measure the full lockup and bounce anyone the new box now covers.
       stepPhysics(
         bodies,
         rect.width,
         usableHeight,
         0,
-        readLogoExclusion(rect, logoRef?.current),
+        readLockupExclusion(rect, lockupRef?.current),
       );
     };
     window.addEventListener("resize", onResize);
     return () => window.removeEventListener("resize", onResize);
-  }, [logoRef]);
+  }, [lockupRef]);
 
   const rendered = Array.from(botMap.values());
 

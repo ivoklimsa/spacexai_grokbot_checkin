@@ -11,16 +11,18 @@ type Props = {
 };
 
 export function Kiosk({ demo = false }: Props) {
-  const logoRef = useRef<HTMLImageElement>(null);
+  const lockupRef = useRef<HTMLDivElement>(null);
 
   return (
     <main className="relative h-dvh w-dvw overflow-hidden bg-[#07090f] text-white">
       <div className="stage-glow pointer-events-none absolute inset-0" />
       <div className="stage-grain pointer-events-none absolute inset-0 opacity-[0.35]" />
 
-      <div className="pointer-events-none absolute left-5 top-5 z-30 flex items-center gap-3">
+      <div
+        ref={lockupRef}
+        className="pointer-events-none absolute left-5 top-5 z-30 flex items-center gap-3"
+      >
         <Image
-          ref={logoRef}
           src="/brand/spacexai-logo.png"
           alt="SpaceXAi"
           width={834}
@@ -39,7 +41,7 @@ export function Kiosk({ demo = false }: Props) {
         </div>
       </div>
 
-      <BotField logoRef={logoRef} />
+      <BotField lockupRef={lockupRef} />
       {demo ? <DemoSpawn visible /> : null}
     </main>
   );
