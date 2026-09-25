@@ -9,10 +9,9 @@ npm install
 npm run dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000).
+Open [http://localhost:3000](http://localhost:3000) for the clean kiosk (stage, bots, logo, and live arrivals).
 
-- Click **+ Spawn** (or press `S` / `/`) to add bots in demo mode.
-- Use `?demo=0` for a clean kiosk: [http://localhost:3000/?demo=0](http://localhost:3000/?demo=0).
+Demo spawn is at [http://localhost:3000/demo](http://localhost:3000/demo). On `/demo`, click **+ Spawn** (or press `S` / `/`) to add bots. Both routes share the same bot field.
 
 ## Live
 

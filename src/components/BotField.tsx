@@ -1,7 +1,7 @@
 "use client";
 
 import Image from "next/image";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type RefObject } from "react";
 import { SpawnCloud } from "@/components/SpawnCloud";
 import {
   clearPersistedBots,
@@ -10,12 +10,19 @@ import {
   saveBots,
   upsertPersistedBot,
 } from "@/lib/bot-persistence";
-import { createBody, stepPhysics, type PhysicsBody } from "@/lib/physics";
+import {
+  createBody,
+  stepPhysics,
+  type ExclusionRect,
+  type PhysicsBody,
+} from "@/lib/physics";
 import type { Bot } from "@/lib/types";
 
 const AVATAR_SIZE = 92;
 const HIT_RADIUS = 48;
 const LABEL_CLEARANCE = 28;
+/** Logo layout box grows by this much on every side before physics treats it as solid. */
+const LOGO_EXCLUSION_PAD = 24;
 
 /** Cloud pops in, holds, then crossfades into the grok avatar. */
 const CLOUD_IN_MS = 420;
@@ -25,7 +32,24 @@ const INTRO_TOTAL_MS = CLOUD_IN_MS + CLOUD_HOLD_MS + REVEAL_MS;
 
 type Props = {
   initialBots?: Bot[];
+  /** Rendered SpaceXAi wordmark. Its layout box is the exclusion zone. */
+  logoRef?: RefObject<HTMLImageElement | null>;
 };
+
+function readLogoExclusion(
+  stage: DOMRect | undefined,
+  logo: HTMLImageElement | null | undefined,
+): ExclusionRect | null {
+  if (!stage || !logo) return null;
+  const box = logo.getBoundingClientRect();
+  if (box.width < 1 || box.height < 1) return null;
+  return {
+    left: box.left - stage.left - LOGO_EXCLUSION_PAD,
+    top: box.top - stage.top - LOGO_EXCLUSION_PAD,
+    right: box.right - stage.left + LOGO_EXCLUSION_PAD,
+    bottom: box.bottom - stage.top + LOGO_EXCLUSION_PAD,
+  };
+}
 
 type HelloEvent = { type: "hello"; bots: Bot[] };
 type SpawnEvent = { type: "spawn"; bot: Bot };
@@ -46,7 +70,7 @@ function easeOutCubic(t: number) {
   return 1 - Math.pow(1 - t, 3);
 }
 
-export function BotField({ initialBots = [] }: Props) {
+export function BotField({ initialBots = [], logoRef }: Props) {
   const stageRef = useRef<HTMLDivElement>(null);
   const bodiesRef = useRef<Map<string, PhysicsBody>>(new Map());
   const botsRef = useRef<Map<string, Bot>>(new Map());
@@ -81,6 +105,7 @@ export function BotField({ initialBots = [] }: Props) {
       usableHeight,
       HIT_RADIUS,
       Array.from(bodiesRef.current.values()),
+      readLogoExclusion(rect, logoRef?.current),
     );
     // Hydrated bots skip the cloud intro.
     if (options?.animate === false) {
@@ -192,7 +217,8 @@ export function BotField({ initialBots = [] }: Props) {
       const usableHeight = Math.max(HIT_RADIUS * 2, height - LABEL_CLEARANCE);
 
       const bodies = Array.from(bodiesRef.current.values());
-      stepPhysics(bodies, width, usableHeight, dt);
+      const exclusion = readLogoExclusion(rect, logoRef?.current);
+      stepPhysics(bodies, width, usableHeight, dt, exclusion);
 
       setTick((n) => (n + 1) % 1_000_000);
       rafRef.current = requestAnimationFrame(loop);
@@ -202,24 +228,33 @@ export function BotField({ initialBots = [] }: Props) {
     return () => {
       if (rafRef.current) cancelAnimationFrame(rafRef.current);
     };
-  }, []);
+  }, [logoRef]);
 
   useEffect(() => {
     const onResize = () => {
       const rect = stageRef.current?.getBoundingClientRect();
       if (!rect) return;
       const usableHeight = Math.max(HIT_RADIUS * 2, rect.height - LABEL_CLEARANCE);
-      for (const body of bodiesRef.current.values()) {
+      const bodies = Array.from(bodiesRef.current.values());
+      for (const body of bodies) {
         body.x = Math.min(Math.max(body.radius, body.x), rect.width - body.radius);
         body.y = Math.min(
           Math.max(body.radius, body.y),
           usableHeight - body.radius,
         );
       }
+      // Re-measure the logo and bounce anyone the new box now covers.
+      stepPhysics(
+        bodies,
+        rect.width,
+        usableHeight,
+        0,
+        readLogoExclusion(rect, logoRef?.current),
+      );
     };
     window.addEventListener("resize", onResize);
     return () => window.removeEventListener("resize", onResize);
-  }, []);
+  }, [logoRef]);
 
   const rendered = Array.from(botMap.values());
 

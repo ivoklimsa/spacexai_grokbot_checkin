@@ -1,18 +1,17 @@
 "use client";
 
 import Image from "next/image";
-import { useMemo } from "react";
-import { useSearchParams } from "next/navigation";
+import { useRef } from "react";
 import { BotField } from "@/components/BotField";
 import { DemoSpawn } from "@/components/DemoSpawn";
 
-export function Kiosk() {
-  const searchParams = useSearchParams();
-  const demoVisible = useMemo(() => {
-    const raw = searchParams.get("demo");
-    if (raw === "0" || raw === "false") return false;
-    return true;
-  }, [searchParams]);
+type Props = {
+  /** Spawn controls and S / shortcuts. Only the `/demo` route sets this. */
+  demo?: boolean;
+};
+
+export function Kiosk({ demo = false }: Props) {
+  const logoRef = useRef<HTMLImageElement>(null);
 
   return (
     <main className="relative h-dvh w-dvw overflow-hidden bg-[#07090f] text-white">
@@ -21,6 +20,7 @@ export function Kiosk() {
 
       <div className="pointer-events-none absolute left-5 top-5 z-30 flex items-center gap-3">
         <Image
+          ref={logoRef}
           src="/brand/spacexai-logo.png"
           alt="SpaceXAi"
           width={834}
@@ -39,8 +39,8 @@ export function Kiosk() {
         </div>
       </div>
 
-      <BotField />
-      <DemoSpawn visible={demoVisible} />
+      <BotField logoRef={logoRef} />
+      {demo ? <DemoSpawn visible /> : null}
     </main>
   );
 }
