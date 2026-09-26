@@ -1,25 +1,28 @@
 "use client";
 
 import Image from "next/image";
-import { useMemo } from "react";
-import { useSearchParams } from "next/navigation";
+import { useRef } from "react";
 import { BotField } from "@/components/BotField";
 import { DemoSpawn } from "@/components/DemoSpawn";
 
-export function Kiosk() {
-  const searchParams = useSearchParams();
-  const demoVisible = useMemo(() => {
-    const raw = searchParams.get("demo");
-    if (raw === "0" || raw === "false") return false;
-    return true;
-  }, [searchParams]);
+type Props = {
+  /** Spawn controls and S / shortcuts. Only the `/demo` route sets this. */
+  demo?: boolean;
+};
+
+export function Kiosk({ demo = false }: Props) {
+  const lockupRef = useRef<HTMLDivElement>(null);
 
   return (
     <main className="relative h-dvh w-dvw overflow-hidden bg-[#07090f] text-white">
       <div className="stage-glow pointer-events-none absolute inset-0" />
       <div className="stage-grain pointer-events-none absolute inset-0 opacity-[0.35]" />
 
-      <div className="pointer-events-none absolute left-5 top-5 z-30 flex items-center gap-3">
+      <div
+        ref={lockupRef}
+        data-brand-lockup=""
+        className="pointer-events-none absolute left-5 top-5 z-30 flex items-center gap-3"
+      >
         <Image
           src="/brand/spacexai-logo.png"
           alt="SpaceXAi"
@@ -39,8 +42,8 @@ export function Kiosk() {
         </div>
       </div>
 
-      <BotField />
-      <DemoSpawn visible={demoVisible} />
+      <BotField lockupRef={lockupRef} />
+      {demo ? <DemoSpawn visible /> : null}
     </main>
   );
 }

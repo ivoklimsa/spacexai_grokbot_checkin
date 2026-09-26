@@ -1,7 +1,7 @@
 "use client";
 
 import Image from "next/image";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type RefObject } from "react";
 import { SpawnCloud } from "@/components/SpawnCloud";
 import {
   clearPersistedBots,
@@ -10,12 +10,20 @@ import {
   saveBots,
   upsertPersistedBot,
 } from "@/lib/bot-persistence";
-import { createBody, stepPhysics, type PhysicsBody } from "@/lib/physics";
+import {
+  createBody,
+  stepPhysics,
+  type ExclusionRect,
+  type PhysicsBody,
+} from "@/lib/physics";
 import type { Bot } from "@/lib/types";
 
 const AVATAR_SIZE = 92;
 const HIT_RADIUS = 48;
 const LABEL_CLEARANCE = 28;
+/** Header lockup box grows by this much on every side before physics treats it as solid. */
+const LOCKUP_EXCLUSION_PAD = 24;
+// Pad applies to the full lockup union (logo + Check-in title), remeasured each frame.
 
 /** Cloud pops in, holds, then crossfades into the grok avatar. */
 const CLOUD_IN_MS = 420;
@@ -25,7 +33,44 @@ const INTRO_TOTAL_MS = CLOUD_IN_MS + CLOUD_HOLD_MS + REVEAL_MS;
 
 type Props = {
   initialBots?: Bot[];
+  /**
+   * Header brand lockup: logo image plus the adjacent Check-in title chrome.
+   * Its layout box (not the logo image alone) is the exclusion zone.
+   */
+  lockupRef?: RefObject<HTMLElement | null>;
 };
+
+/**
+ * Border box of the lockup plus every logo image and title line inside it.
+ * A flex wrapper can be smaller than overflowing title ink; the union keeps
+ * “Check-in” and “Live arrivals” inside the obstacle, not only the XA img.
+ */
+function readLockupExclusion(
+  stage: DOMRect | undefined,
+  lockup: HTMLElement | null | undefined,
+): ExclusionRect | null {
+  if (!stage || !lockup) return null;
+  const nodes: Element[] = [lockup, ...lockup.querySelectorAll("img, p")];
+  let left = Infinity;
+  let top = Infinity;
+  let right = -Infinity;
+  let bottom = -Infinity;
+  for (const node of nodes) {
+    const box = node.getBoundingClientRect();
+    if (box.width < 1 || box.height < 1) continue;
+    left = Math.min(left, box.left);
+    top = Math.min(top, box.top);
+    right = Math.max(right, box.right);
+    bottom = Math.max(bottom, box.bottom);
+  }
+  if (!Number.isFinite(left) || right - left < 1 || bottom - top < 1) return null;
+  return {
+    left: left - stage.left - LOCKUP_EXCLUSION_PAD,
+    top: top - stage.top - LOCKUP_EXCLUSION_PAD,
+    right: right - stage.left + LOCKUP_EXCLUSION_PAD,
+    bottom: bottom - stage.top + LOCKUP_EXCLUSION_PAD,
+  };
+}
 
 type HelloEvent = { type: "hello"; bots: Bot[] };
 type SpawnEvent = { type: "spawn"; bot: Bot };
@@ -46,7 +91,7 @@ function easeOutCubic(t: number) {
   return 1 - Math.pow(1 - t, 3);
 }
 
-export function BotField({ initialBots = [] }: Props) {
+export function BotField({ initialBots = [], lockupRef }: Props) {
   const stageRef = useRef<HTMLDivElement>(null);
   const bodiesRef = useRef<Map<string, PhysicsBody>>(new Map());
   const botsRef = useRef<Map<string, Bot>>(new Map());
@@ -81,6 +126,7 @@ export function BotField({ initialBots = [] }: Props) {
       usableHeight,
       HIT_RADIUS,
       Array.from(bodiesRef.current.values()),
+      readLockupExclusion(rect, lockupRef?.current),
     );
     // Hydrated bots skip the cloud intro.
     if (options?.animate === false) {
@@ -192,7 +238,8 @@ export function BotField({ initialBots = [] }: Props) {
       const usableHeight = Math.max(HIT_RADIUS * 2, height - LABEL_CLEARANCE);
 
       const bodies = Array.from(bodiesRef.current.values());
-      stepPhysics(bodies, width, usableHeight, dt);
+      const exclusion = readLockupExclusion(rect, lockupRef?.current);
+      stepPhysics(bodies, width, usableHeight, dt, exclusion);
 
       setTick((n) => (n + 1) % 1_000_000);
       rafRef.current = requestAnimationFrame(loop);
@@ -202,24 +249,33 @@ export function BotField({ initialBots = [] }: Props) {
     return () => {
       if (rafRef.current) cancelAnimationFrame(rafRef.current);
     };
-  }, []);
+  }, [lockupRef]);
 
   useEffect(() => {
     const onResize = () => {
       const rect = stageRef.current?.getBoundingClientRect();
       if (!rect) return;
       const usableHeight = Math.max(HIT_RADIUS * 2, rect.height - LABEL_CLEARANCE);
-      for (const body of bodiesRef.current.values()) {
+      const bodies = Array.from(bodiesRef.current.values());
+      for (const body of bodies) {
         body.x = Math.min(Math.max(body.radius, body.x), rect.width - body.radius);
         body.y = Math.min(
           Math.max(body.radius, body.y),
           usableHeight - body.radius,
         );
       }
+      // Re-measure the full lockup and bounce anyone the new box now covers.
+      stepPhysics(
+        bodies,
+        rect.width,
+        usableHeight,
+        0,
+        readLockupExclusion(rect, lockupRef?.current),
+      );
     };
     window.addEventListener("resize", onResize);
     return () => window.removeEventListener("resize", onResize);
-  }, []);
+  }, [lockupRef]);
 
   const rendered = Array.from(botMap.values());
 
