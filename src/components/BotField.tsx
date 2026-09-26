@@ -23,6 +23,7 @@ const HIT_RADIUS = 48;
 const LABEL_CLEARANCE = 28;
 /** Header lockup box grows by this much on every side before physics treats it as solid. */
 const LOCKUP_EXCLUSION_PAD = 24;
+// Pad applies to the full lockup union (logo + Check-in title), remeasured each frame.
 
 /** Cloud pops in, holds, then crossfades into the grok avatar. */
 const CLOUD_IN_MS = 420;
