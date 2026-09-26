@@ -13,6 +13,8 @@ Open [http://localhost:3000](http://localhost:3000) for the clean kiosk (stage, 
 
 Demo spawn is at [http://localhost:3000/demo](http://localhost:3000/demo). On `/demo`, click **+ Spawn** (or press `S` / `/`) to add bots. Both routes share the same bot field.
 
+`/admin` lists check-ins and can reset the field.
+
 ## Live
 
 Production: [https://spacexai-checkin.vercel.app](https://spacexai-checkin.vercel.app)  
