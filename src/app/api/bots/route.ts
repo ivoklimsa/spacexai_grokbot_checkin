@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { listBots, spawnBot } from "@/lib/bot-store";
+import { listBots, resetBots, spawnBot } from "@/lib/bot-store";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -30,4 +30,9 @@ export async function POST(request: Request) {
   }
 
   return NextResponse.json({ bot }, { status: 201 });
+}
+
+export async function DELETE() {
+  resetBots();
+  return NextResponse.json({ ok: true });
 }
