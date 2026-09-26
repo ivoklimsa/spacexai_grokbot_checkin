@@ -14,19 +14,20 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 /**
- * Luma guest.updated webhook stub.
- * Inactive until LUMA_WEBHOOK_SECRET (and optionally LUMA_EVENT_ID) are set.
+ * Luma `guest.updated` webhook.
+ * Inactive (503) until LUMA_WEBHOOK_SECRET is set. When LUMA_EVENT_ID is set,
+ * only a checked-in guest on that event (`evt_…`) spawns a bot.
  */
 export async function POST(request: Request) {
-  const secret = process.env.LUMA_WEBHOOK_SECRET;
-  const expectedEventId = process.env.LUMA_EVENT_ID;
+  const secret = process.env.LUMA_WEBHOOK_SECRET?.trim() ?? "";
+  const expectedEventId = process.env.LUMA_EVENT_ID?.trim() ?? "";
 
   if (!secret) {
     return NextResponse.json(
       {
         ok: false,
         message:
-          "Luma webhook inactive. Set LUMA_WEBHOOK_SECRET (and optionally LUMA_EVENT_ID) to enable.",
+          "Luma webhook inactive. Set LUMA_WEBHOOK_SECRET to enable. Bind one event with LUMA_EVENT_ID (evt_… id).",
       },
       { status: 503 },
     );
@@ -55,15 +56,12 @@ export async function POST(request: Request) {
     return NextResponse.json({ ok: true, ignored: true, reason: "not_checked_in" });
   }
 
-  if (expectedEventId) {
-    const eventId = guestEventId(guest);
-    if (eventId && eventId !== expectedEventId) {
-      return NextResponse.json({
-        ok: true,
-        ignored: true,
-        reason: "other_event",
-      });
-    }
+  if (expectedEventId && guestEventId(guest) !== expectedEventId) {
+    return NextResponse.json({
+      ok: true,
+      ignored: true,
+      reason: "other_event",
+    });
   }
 
   const name = guestDisplayName(guest);

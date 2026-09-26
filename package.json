@@ -6,7 +6,8 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "luma:fixture": "node scripts/luma-webhook-fixture.mjs"
   },
   "dependencies": {
     "next": "16.3.6",

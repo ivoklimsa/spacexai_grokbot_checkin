@@ -4,13 +4,21 @@ export type LumaTicket = {
   checked_in_at?: string | null;
 };
 
+/** Event object on a Luma `guest.updated` payload (`data.event`). */
+export type LumaEventRef = {
+  id?: string;
+  api_id?: string;
+};
+
 export type LumaGuestPayload = {
   api_id?: string;
   id?: string;
+  /** Present on the in-repo fixture. Official payloads use `event.id`. */
   event_api_id?: string;
-  user_name?: string;
-  name?: string;
-  user?: { name?: string };
+  event?: LumaEventRef;
+  user_name?: string | null;
+  name?: string | null;
+  user?: { name?: string | null };
   event_tickets?: LumaTicket[];
   checked_in_at?: string | null;
 };
@@ -32,7 +40,7 @@ export function verifyWebhookSignature(
   for (const part of signatureHeader.split(",")) {
     const idx = part.indexOf("=");
     if (idx === -1) continue;
-    parts[part.slice(0, idx)] = part.slice(idx + 1);
+    parts[part.slice(0, idx).trim()] = part.slice(idx + 1).trim();
   }
 
   const timestamp = parts.t;
@@ -65,22 +73,32 @@ export function isCheckedIn(guest: LumaGuestPayload | undefined): boolean {
   return (guest.event_tickets ?? []).some((t) => Boolean(t.checked_in_at));
 }
 
+function text(value: unknown): string {
+  return typeof value === "string" ? value.trim() : "";
+}
+
 export function guestDisplayName(guest: LumaGuestPayload | undefined): string {
   if (!guest) return "";
   return (
-    guest.user_name?.trim() ||
-    guest.name?.trim() ||
-    guest.user?.name?.trim() ||
-    ""
+    text(guest.user_name) || text(guest.name) || text(guest.user?.name) || ""
   );
 }
 
 export function guestId(guest: LumaGuestPayload | undefined): string {
   if (!guest) return "";
-  return guest.api_id?.trim() || guest.id?.trim() || "";
+  return text(guest.api_id) || text(guest.id);
 }
 
+/**
+ * Event id used for the LUMA_EVENT_ID filter.
+ * Official `guest.updated` bodies send `data.event.id` (`evt_…`).
+ * `event_api_id` is the field the signed fixture and older notes use.
+ */
 export function guestEventId(guest: LumaGuestPayload | undefined): string {
   if (!guest) return "";
-  return guest.event_api_id?.trim() || "";
+  return (
+    text(guest.event?.id) ||
+    text(guest.event?.api_id) ||
+    text(guest.event_api_id)
+  );
 }
