@@ -15,7 +15,7 @@ Open [http://localhost:3000](http://localhost:3000) for the clean kiosk (stage, 
 
 `/admin` lists check-ins and can reset the live field.
 
-[http://localhost:3000/project](http://localhost:3000/project) is a simple form for registering a project (name required; participant, GitHub link, and web page optional). Registrations are shared across browsers through Redis. The page loads without those env vars; creating and listing projects returns **503** until they are set.
+[http://localhost:3000/project](http://localhost:3000/project) is a simple form for registering a project (name required; participant, GitHub link, and web page optional). Registrations are shared across browsers through Neon Postgres. The page loads without a database URL; creating and listing projects returns **503** until `DATABASE_URL` or `POSTGRES_URL` is set.
 
 ## Live
 
@@ -34,7 +34,7 @@ Demo (/demo) — separate, client-only:
   (no API, no SSE, no localStorage; refresh clears)
 
 Projects (/project):
-  Form ──POST /api/projects──► Upstash Redis (REST)
+  Form ──POST /api/projects──► Neon Postgres
   List ◄──GET /api/projects───
   Participant names ◄──GET /api/bots (suggest only; bots stay in memory)
 ```
@@ -58,27 +58,22 @@ Client physics (`src/lib/physics.ts`) applies soft float drift, circle–circle 
 
 The participant field suggests names from the current check-in list (`GET /api/bots`, `Bot[].name`) when that list has names. A name that is not checked in can still be typed. If the bot list is empty, the field is plain text.
 
-Each record is `{ id, projectName, participant?, githubUrl?, webUrl?, createdAt }`. Records are appended to the Redis list key `spacexai:projects`. They are not stored in `localStorage` or the in-memory bot map.
+Each record is `{ id, projectName, participant?, githubUrl?, webUrl?, createdAt }`. Rows live in the Postgres table `projects`. They are not stored in `localStorage` or the in-memory bot map.
 
 Optional GitHub and web values are stored as entered. Values that start with `http://` or `https://` are shown as links.
 
+The `projects` table is created on first use (`CREATE TABLE IF NOT EXISTS`). No manual migration is required.
+
 ### Env vars (names only)
 
-Set these on the Vercel project **`spacexai-grokbot-checkin`** (Production, and Preview if a preview should keep projects). The operator provisions the values. Do not commit them.
+The client is `@neondatabase/serverless`. On the Vercel project **`spacexai-grokbot-checkin`**, set `DATABASE_URL` to the connection string from the Neon dashboard (Connection string). Set it for Production, and for Preview if a preview should keep projects. Do not commit the value.
 
 | Name | Role |
 |------|------|
-| `UPSTASH_REDIS_REST_URL` | Upstash Redis REST URL. Set together with the token below. |
-| `UPSTASH_REDIS_REST_TOKEN` | Upstash Redis REST token. |
+| `DATABASE_URL` | Neon connection string. Used when it is set. |
+| `POSTGRES_URL` | Alias. Used only when `DATABASE_URL` is unset. |
 
-If neither Upstash variable is set, these Vercel KV-compatible names are used instead. Set them as a pair. A half-set pair does not fall through to the other pair.
-
-| Name | Role |
-|------|------|
-| `KV_REST_API_URL` | Vercel KV-compatible REST URL. |
-| `KV_REST_API_TOKEN` | Vercel KV-compatible REST token. |
-
-If neither pair is complete, `GET` and `POST /api/projects` return **503** with `Project store is not configured`.
+If neither name is set, `GET` and `POST /api/projects` return **503** with `Project store is not configured`.
 
 ## Luma check-in
 

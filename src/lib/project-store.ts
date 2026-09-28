@@ -1,8 +1,19 @@
-import { parseStoredProject, type ProjectInput } from "@/lib/project-input";
+import { neon, type NeonQueryFunction } from "@neondatabase/serverless";
+import type { ProjectInput } from "@/lib/project-input";
 import type { Project } from "@/lib/types";
 
-const PROJECTS_KEY = "spacexai:projects";
-const REDIS_TIMEOUT_MS = 8000;
+const QUERY_TIMEOUT_MS = 8000;
+
+type Sql = NeonQueryFunction<false, false>;
+
+type ProjectRow = {
+  id: unknown;
+  project_name: unknown;
+  participant: unknown;
+  github_url: unknown;
+  web_url: unknown;
+  created_at: unknown;
+};
 
 export class ProjectStoreError extends Error {
   status: number;
@@ -14,101 +25,146 @@ export class ProjectStoreError extends Error {
   }
 }
 
-export async function listProjects(): Promise<Project[]> {
-  const raw = await redisCommand<unknown>(["LRANGE", PROJECTS_KEY, "0", "-1"]);
-  if (raw == null) return [];
-  if (!Array.isArray(raw)) {
-    throw new ProjectStoreError("Project store request failed", 502);
-  }
+let schemaReady: Promise<void> | null = null;
 
+export async function listProjects(): Promise<Project[]> {
+  const rows = await withSql(
+    (sql) => sql`
+      SELECT id, project_name, participant, github_url, web_url, created_at
+      FROM projects
+      ORDER BY created_at DESC, id DESC
+    `,
+  );
   const projects: Project[] = [];
-  for (const entry of raw) {
-    if (typeof entry !== "string") continue;
-    const project = parseStoredProject(entry);
+  for (const row of rows) {
+    const project = rowToProject(row as ProjectRow);
     if (project) projects.push(project);
   }
-  projects.reverse();
   return projects;
 }
 
 export async function createProject(input: ProjectInput): Promise<Project> {
-  const project: Project = {
-    id: crypto.randomUUID(),
-    projectName: input.projectName,
-    createdAt: new Date().toISOString(),
-  };
-  if (input.participant) project.participant = input.participant;
-  if (input.githubUrl) project.githubUrl = input.githubUrl;
-  if (input.webUrl) project.webUrl = input.webUrl;
-
-  const length = await redisCommand<unknown>([
-    "RPUSH",
-    PROJECTS_KEY,
-    JSON.stringify(project),
-  ]);
-  if (typeof length !== "number") {
+  const id = crypto.randomUUID();
+  const createdAt = new Date().toISOString();
+  const rows = await withSql(
+    (sql) => sql`
+      INSERT INTO projects (
+        id,
+        project_name,
+        participant,
+        github_url,
+        web_url,
+        created_at
+      )
+      VALUES (
+        ${id},
+        ${input.projectName},
+        ${input.participant ?? null},
+        ${input.githubUrl ?? null},
+        ${input.webUrl ?? null},
+        ${createdAt}
+      )
+      RETURNING id, project_name, participant, github_url, web_url, created_at
+    `,
+  );
+  const project = rowToProject(rows[0] as ProjectRow);
+  if (!project) {
     throw new ProjectStoreError("Project store request failed", 502);
   }
   return project;
 }
 
-function requireRedis(): { url: string; token: string } {
-  const upstashUrl = clean(process.env.UPSTASH_REDIS_REST_URL);
-  const upstashToken = clean(process.env.UPSTASH_REDIS_REST_TOKEN);
-  if (upstashUrl || upstashToken) {
-    if (upstashUrl && upstashToken) {
-      return { url: upstashUrl.replace(/\/$/, ""), token: upstashToken };
-    }
-    throw new ProjectStoreError("Project store is not configured", 503);
+async function withSql<T>(run: (sql: Sql) => Promise<T>): Promise<T> {
+  try {
+    const sql = getSql();
+    await ensureSchema(sql);
+    return await run(sql);
+  } catch (error) {
+    if (error instanceof ProjectStoreError) throw error;
+    console.error("Project store request failed", safeError(error));
+    throw new ProjectStoreError("Project store request failed", 502);
   }
+}
 
-  const kvUrl = clean(process.env.KV_REST_API_URL);
-  const kvToken = clean(process.env.KV_REST_API_TOKEN);
-  if (kvUrl && kvToken) {
-    return { url: kvUrl.replace(/\/$/, ""), token: kvToken };
-  }
+function getSql(): Sql {
+  return neon(databaseUrl(), {
+    fetchOptions: {
+      cache: "no-store",
+      signal: AbortSignal.timeout(QUERY_TIMEOUT_MS),
+    },
+  });
+}
 
+function databaseUrl(): string {
+  const databaseUrl = clean(process.env.DATABASE_URL);
+  if (databaseUrl) return databaseUrl;
+  const postgresUrl = clean(process.env.POSTGRES_URL);
+  if (postgresUrl) return postgresUrl;
   throw new ProjectStoreError("Project store is not configured", 503);
 }
 
-async function redisCommand<T>(command: string[]): Promise<T> {
-  const { url, token } = requireRedis();
-  let response: Response;
-  try {
-    response = await fetch(url, {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${token}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify(command),
-      cache: "no-store",
-      signal: AbortSignal.timeout(REDIS_TIMEOUT_MS),
-    });
-  } catch (error) {
-    console.error(
-      "Project store request failed",
-      error instanceof Error ? error.name : "error",
-    );
-    throw new ProjectStoreError("Project store request failed", 502);
+function ensureSchema(sql: Sql): Promise<void> {
+  if (!schemaReady) {
+    schemaReady = sql`
+      CREATE TABLE IF NOT EXISTS projects (
+        id text PRIMARY KEY,
+        project_name text NOT NULL,
+        participant text,
+        github_url text,
+        web_url text,
+        created_at timestamptz NOT NULL
+      )
+    `
+      .then(() => undefined)
+      .catch((error: unknown) => {
+        schemaReady = null;
+        throw error;
+      });
   }
+  return schemaReady;
+}
 
-  let payload: { result?: T; error?: string };
-  try {
-    payload = (await response.json()) as { result?: T; error?: string };
-  } catch {
-    console.error("Project store returned a non-JSON response", response.status);
-    throw new ProjectStoreError("Project store request failed", 502);
+function rowToProject(row: ProjectRow | undefined): Project | null {
+  if (!row) return null;
+  if (typeof row.id !== "string" || !row.id) return null;
+  if (typeof row.project_name !== "string" || !row.project_name.trim()) return null;
+  const createdAt = toIso(row.created_at);
+  if (!createdAt) return null;
+
+  const project: Project = {
+    id: row.id,
+    projectName: row.project_name,
+    createdAt,
+  };
+  if (typeof row.participant === "string" && row.participant) {
+    project.participant = row.participant;
   }
-
-  if (!response.ok || payload.error) {
-    console.error("Project store request failed", response.status);
-    throw new ProjectStoreError("Project store request failed", 502);
+  if (typeof row.github_url === "string" && row.github_url) {
+    project.githubUrl = row.github_url;
   }
+  if (typeof row.web_url === "string" && row.web_url) {
+    project.webUrl = row.web_url;
+  }
+  return project;
+}
 
-  return payload.result as T;
+function toIso(value: unknown): string | null {
+  if (value instanceof Date && !Number.isNaN(value.getTime())) {
+    return value.toISOString();
+  }
+  if (typeof value === "string" && value) {
+    const date = new Date(value);
+    if (!Number.isNaN(date.getTime())) return date.toISOString();
+  }
+  return null;
 }
 
 function clean(value: string | undefined): string {
   return value?.trim() ?? "";
+}
+
+function safeError(error: unknown): string {
+  const message = error instanceof Error ? error.message : "error";
+  if (/postgres(ql)?:\/\//i.test(message)) return "database error";
+  return message;
 }

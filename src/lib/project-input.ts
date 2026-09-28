@@ -1,5 +1,3 @@
-import type { Project } from "@/lib/types";
-
 const LIMITS = {
   projectName: 200,
   participant: 120,
@@ -50,37 +48,6 @@ export function parseProjectInput(
   if (githubUrl.value) value.githubUrl = githubUrl.value;
   if (webUrl.value) value.webUrl = webUrl.value;
   return { ok: true, value };
-}
-
-export function parseStoredProject(raw: string): Project | null {
-  let value: unknown;
-  try {
-    value = JSON.parse(raw);
-  } catch {
-    return null;
-  }
-  if (typeof value !== "object" || value === null) return null;
-
-  const record = value as Record<string, unknown>;
-  if (typeof record.id !== "string" || !record.id) return null;
-  if (typeof record.projectName !== "string" || !record.projectName.trim()) return null;
-  if (typeof record.createdAt !== "string" || !record.createdAt) return null;
-
-  const project: Project = {
-    id: record.id,
-    projectName: record.projectName,
-    createdAt: record.createdAt,
-  };
-  if (typeof record.participant === "string" && record.participant) {
-    project.participant = record.participant;
-  }
-  if (typeof record.githubUrl === "string" && record.githubUrl) {
-    project.githubUrl = record.githubUrl;
-  }
-  if (typeof record.webUrl === "string" && record.webUrl) {
-    project.webUrl = record.webUrl;
-  }
-  return project;
 }
 
 function readText(
