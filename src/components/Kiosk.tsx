@@ -42,8 +42,9 @@ export function Kiosk({ demo = false }: Props) {
         </div>
       </div>
 
-      <BotField lockupRef={lockupRef} />
-      {demo ? <DemoSpawn visible /> : null}
+      <BotField lockupRef={lockupRef} ephemeral={demo}>
+        {demo ? <DemoSpawn visible /> : null}
+      </BotField>
     </main>
   );
 }
