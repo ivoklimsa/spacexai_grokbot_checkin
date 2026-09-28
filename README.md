@@ -13,9 +13,9 @@ Open [http://localhost:3000](http://localhost:3000) for the clean kiosk (stage, 
 
 [http://localhost:3000/demo](http://localhost:3000/demo) is an **independent client-only sandbox**. Click **+ Spawn** (or press `S` / `/`, or Random) to add bots — that is the only way bots appear on `/demo`. It is not connected to Luma, `/admin`, or `/api/bots`, and it does not use `localStorage`. Refresh clears demo bots by design. `/` and `/admin` are unchanged and still share the live store.
 
-`/admin` lists check-ins and can reset the live field.
+`/admin` lists check-ins. Reset clears check-ins and project registrations.
 
-[http://localhost:3000/project](http://localhost:3000/project) is a simple form for registering a project (name required; participant, GitHub link, and web page optional). Registrations are shared across browsers through Neon Postgres. The page loads without a database URL; creating and listing projects returns **503** until `DATABASE_URL` or `DATABASE_URL_POOLED` is set.
+[http://localhost:3000/project](http://localhost:3000/project) is a simple form for registering a project (name required; participant, GitHub link, and web page optional). Registrations are shared across browsers through Neon Postgres. The page loads without a database URL; creating, listing, and deleting projects returns **503** until `DATABASE_URL` or `DATABASE_URL_POOLED` is set.
 
 ## Live
 
@@ -27,7 +27,7 @@ Project: `spacexai-grokbot-checkin` on team **Ivo's playground**
 ```
 Live (/):
   Luma guest.updated ──POST /api/luma/webhook──► in-memory store ──SSE──► kiosk (/)
-  /admin reset ────────────────────────────────► same store
+  /admin Reset ──► same store (check-ins) and DELETE /api/projects (all Neon rows)
 
 Demo (/demo) — separate, client-only:
   Spawn button (S, /, Random) ──► createBot() ──► React state + physics
@@ -51,10 +51,11 @@ Client physics (`src/lib/physics.ts`) applies soft float drift, circle–circle 
 | `POST` | `/api/luma/webhook` | Luma `guest.updated` → spawn a bot when the guest is checked in on `LUMA_EVENT_ID` |
 | `GET` | `/api/projects` | Project registrations, newest first |
 | `POST` | `/api/projects` | Create `{ "projectName", "participant"?, "githubUrl"?, "webUrl"? }` |
+| `DELETE` | `/api/projects` | Delete every project registration (zero rows still succeeds) |
 
 ## Project signup
 
-`/project` stores one registration per submit. The same project name may be registered more than once. There is no auth gate and no edit or delete UI.
+`/project` stores one registration per submit. The same project name may be registered more than once. There is no auth gate and no per-row delete. `/admin` Reset deletes every registration.
 
 The participant field suggests names from the current check-in list (`GET /api/bots`, `Bot[].name`) when that list has names. A name that is not checked in can still be typed. If the bot list is empty, the field is plain text.
 
@@ -75,7 +76,7 @@ The client is `@neondatabase/serverless`. On the Vercel project **`spacexai-grok
 
 When both are set, queries use `DATABASE_URL_POOLED`. When only one is set, that one is used.
 
-If neither name is set, `GET` and `POST /api/projects` return **503** with `Project store is not configured`.
+If neither name is set, `GET`, `POST`, and `DELETE /api/projects` return **503** with `Project store is not configured`.
 
 ## Luma check-in
 

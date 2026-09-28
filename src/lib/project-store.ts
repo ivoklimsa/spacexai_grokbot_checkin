@@ -43,6 +43,10 @@ export async function listProjects(): Promise<Project[]> {
   return projects;
 }
 
+export async function deleteAllProjects(): Promise<void> {
+  await withSql((sql) => sql`DELETE FROM projects`);
+}
+
 export async function createProject(input: ProjectInput): Promise<Project> {
   const id = crypto.randomUUID();
   const createdAt = new Date().toISOString();
