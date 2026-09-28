@@ -15,3 +15,12 @@ export type ResetEvent = {
 };
 
 export type StreamEvent = SpawnEvent | ResetEvent;
+
+export type Project = {
+  id: string;
+  projectName: string;
+  participant?: string;
+  githubUrl?: string;
+  webUrl?: string;
+  createdAt: string;
+};

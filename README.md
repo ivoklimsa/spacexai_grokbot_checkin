@@ -15,6 +15,8 @@ Open [http://localhost:3000](http://localhost:3000) for the clean kiosk (stage, 
 
 `/admin` lists check-ins and can reset the live field.
 
+[http://localhost:3000/project](http://localhost:3000/project) is a simple form for registering a project (name required; participant, GitHub link, and web page optional). Registrations are shared across browsers through Redis. The page loads without those env vars; creating and listing projects returns **503** until they are set.
+
 ## Live
 
 Production: [https://spacexai-checkin.vercel.app](https://spacexai-checkin.vercel.app)  
@@ -30,6 +32,11 @@ Live (/):
 Demo (/demo) — separate, client-only:
   Spawn button (S, /, Random) ──► createBot() ──► React state + physics
   (no API, no SSE, no localStorage; refresh clears)
+
+Projects (/project):
+  Form ──POST /api/projects──► Upstash Redis (REST)
+  List ◄──GET /api/projects───
+  Participant names ◄──GET /api/bots (suggest only; bots stay in memory)
 ```
 
 Client physics (`src/lib/physics.ts`) applies soft float drift, circle–circle elastic bumps, and wall bounce. Name labels ride under avatars but are ignored for hitboxes.
@@ -42,6 +49,36 @@ Client physics (`src/lib/physics.ts`) applies soft float drift, circle–circle 
 | `POST` | `/api/bots` | Spawn `{ "name": "…" }` |
 | `GET` | `/api/bots/stream` | SSE (`hello`, `spawn`, `reset`) |
 | `POST` | `/api/luma/webhook` | Luma `guest.updated` → spawn a bot when the guest is checked in on `LUMA_EVENT_ID` |
+| `GET` | `/api/projects` | Project registrations, newest first |
+| `POST` | `/api/projects` | Create `{ "projectName", "participant"?, "githubUrl"?, "webUrl"? }` |
+
+## Project signup
+
+`/project` stores one registration per submit. The same project name may be registered more than once. There is no auth gate and no edit or delete UI.
+
+The participant field suggests names from the current check-in list (`GET /api/bots`, `Bot[].name`) when that list has names. A name that is not checked in can still be typed. If the bot list is empty, the field is plain text.
+
+Each record is `{ id, projectName, participant?, githubUrl?, webUrl?, createdAt }`. Records are appended to the Redis list key `spacexai:projects`. They are not stored in `localStorage` or the in-memory bot map.
+
+Optional GitHub and web values are stored as entered. Values that start with `http://` or `https://` are shown as links.
+
+### Env vars (names only)
+
+Set these on the Vercel project **`spacexai-grokbot-checkin`** (Production, and Preview if a preview should keep projects). The operator provisions the values. Do not commit them.
+
+| Name | Role |
+|------|------|
+| `UPSTASH_REDIS_REST_URL` | Upstash Redis REST URL. Set together with the token below. |
+| `UPSTASH_REDIS_REST_TOKEN` | Upstash Redis REST token. |
+
+If neither Upstash variable is set, these Vercel KV-compatible names are used instead. Set them as a pair. A half-set pair does not fall through to the other pair.
+
+| Name | Role |
+|------|------|
+| `KV_REST_API_URL` | Vercel KV-compatible REST URL. |
+| `KV_REST_API_TOKEN` | Vercel KV-compatible REST token. |
+
+If neither pair is complete, `GET` and `POST /api/projects` return **503** with `Project store is not configured`.
 
 ## Luma check-in
 
@@ -102,7 +139,7 @@ npm run luma:fixture -- --expect-inactive
 
 ## Notes
 
-- On `/` (and `/admin`), the bot list is persisted in the browser via `localStorage` (`spacexai-checkin-bots`) so a refresh or stuck tab reload keeps spawned groks. Live SSE still uses the in-memory server store for multi-tab updates during a warm session. `/demo` skips persistence entirely — refresh clears its bots.
+- On `/` (and `/admin`), the bot list is persisted in the browser via `localStorage` (`spacexai-checkin-bots`) so a refresh or stuck tab reload keeps spawned groks. Live SSE still uses the in-memory server store for multi-tab updates during a warm session. `/demo` skips persistence entirely — refresh clears its bots. `/project` does not use that key.
 - Avatars live in `public/avatars/bot-01.png` … `bot-12.png`.
 - Deploy only to the Vercel project **`spacexai-grokbot-checkin`**.
 <!-- noop: re-trigger Vercel preview for PR #8 -->
