@@ -15,7 +15,7 @@ Open [http://localhost:3000](http://localhost:3000) for the clean kiosk (stage, 
 
 `/admin` lists check-ins and can reset the live field.
 
-[http://localhost:3000/project](http://localhost:3000/project) is a simple form for registering a project (name required; participant, GitHub link, and web page optional). Registrations are shared across browsers through Neon Postgres. The page loads without a database URL; creating and listing projects returns **503** until `DATABASE_URL` or `POSTGRES_URL` is set.
+[http://localhost:3000/project](http://localhost:3000/project) is a simple form for registering a project (name required; participant, GitHub link, and web page optional). Registrations are shared across browsers through Neon Postgres. The page loads without a database URL; creating and listing projects returns **503** until `DATABASE_URL` or `DATABASE_URL_POOLED` is set.
 
 ## Live
 
@@ -66,12 +66,14 @@ The `projects` table is created on first use (`CREATE TABLE IF NOT EXISTS`). No 
 
 ### Env vars (names only)
 
-The client is `@neondatabase/serverless`. On the Vercel project **`spacexai-grokbot-checkin`**, set `DATABASE_URL` to the connection string from the Neon dashboard (Connection string). Set it for Production, and for Preview if a preview should keep projects. Do not commit the value.
+The client is `@neondatabase/serverless`. On the Vercel project **`spacexai-grokbot-checkin`**, set these for Production, and for Preview if a preview should keep projects. Copy the values from the Neon dashboard (Connection string). Do not commit them.
 
 | Name | Role |
 |------|------|
-| `DATABASE_URL` | Neon connection string. Used when it is set. |
-| `POSTGRES_URL` | Alias. Used only when `DATABASE_URL` is unset. |
+| `DATABASE_URL_POOLED` | Pooled Neon connection string. Used when it is set. |
+| `DATABASE_URL` | Neon connection string. Used when `DATABASE_URL_POOLED` is unset. |
+
+When both are set, queries use `DATABASE_URL_POOLED`. When only one is set, that one is used.
 
 If neither name is set, `GET` and `POST /api/projects` return **503** with `Project store is not configured`.
 

@@ -96,11 +96,13 @@ function getSql(): Sql {
 }
 
 function databaseUrl(): string {
-  const databaseUrl = clean(process.env.DATABASE_URL);
-  if (databaseUrl) return databaseUrl;
-  const postgresUrl = clean(process.env.POSTGRES_URL);
-  if (postgresUrl) return postgresUrl;
-  throw new ProjectStoreError("Project store is not configured", 503);
+  const pooled = clean(process.env.DATABASE_URL_POOLED);
+  const direct = clean(process.env.DATABASE_URL);
+  const url = pooled || direct;
+  if (!url) {
+    throw new ProjectStoreError("Project store is not configured", 503);
+  }
+  return url;
 }
 
 function ensureSchema(sql: Sql): Promise<void> {
