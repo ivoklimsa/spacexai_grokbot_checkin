@@ -13,6 +13,16 @@ type SpawnEvent = { type: "spawn"; bot: Bot };
 type ResetEvent = { type: "reset" };
 type StreamPayload = HelloEvent | SpawnEvent | ResetEvent;
 
+async function readApiError(response: Response, fallback: string): Promise<string> {
+  try {
+    const data = (await response.json()) as { error?: unknown };
+    if (typeof data.error === "string" && data.error.trim()) return data.error;
+  } catch {
+    // Non-JSON bodies fall through to the fallback copy.
+  }
+  return fallback;
+}
+
 function formatRegisteredAt(createdAt: number): string {
   return new Intl.DateTimeFormat(undefined, {
     dateStyle: "medium",
@@ -77,15 +87,32 @@ export function AdminBoard() {
     listEpoch.current += 1;
     setResetting(true);
     setError(null);
+    let projectsCleared = false;
     try {
-      const response = await fetch("/api/bots", { method: "DELETE" });
-      if (!response.ok) {
-        throw new Error("Reset failed");
+      const projectsResponse = await fetch("/api/projects", { method: "DELETE" });
+      if (!projectsResponse.ok) {
+        throw new Error(
+          await readApiError(
+            projectsResponse,
+            "Couldn't clear project registrations",
+          ),
+        );
+      }
+      projectsCleared = true;
+
+      const botsResponse = await fetch("/api/bots", { method: "DELETE" });
+      if (!botsResponse.ok) {
+        throw new Error("Check-in reset failed");
       }
       clearPersistedBots();
       setBots([]);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Reset failed");
+      const detail = err instanceof Error ? err.message : "Reset failed";
+      setError(
+        projectsCleared
+          ? "Project registrations were cleared, but check-in reset failed."
+          : `${detail}. Check-ins were not reset.`,
+      );
       try {
         const data = (await fetch("/api/bots", { cache: "no-store" }).then((r) =>
           r.json(),

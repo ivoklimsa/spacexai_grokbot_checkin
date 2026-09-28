@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { parseProjectInput } from "@/lib/project-input";
 import {
   createProject,
+  deleteAllProjects,
   listProjects,
   ProjectStoreError,
 } from "@/lib/project-store";
@@ -34,6 +35,15 @@ export async function POST(request: Request) {
   try {
     const project = await createProject(parsed.value);
     return NextResponse.json({ project }, { status: 201 });
+  } catch (error) {
+    return storeError(error);
+  }
+}
+
+export async function DELETE() {
+  try {
+    await deleteAllProjects();
+    return NextResponse.json({ ok: true });
   } catch (error) {
     return storeError(error);
   }
