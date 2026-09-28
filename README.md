@@ -9,11 +9,11 @@ npm install
 npm run dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) for the clean kiosk (stage, bots, logo, and live arrivals).
+Open [http://localhost:3000](http://localhost:3000) for the clean kiosk (stage, bots, logo, and live arrivals). Live check-ins arrive via Luma → shared store → SSE.
 
-Demo spawn is at [http://localhost:3000/demo](http://localhost:3000/demo). On `/demo`, click **+ Spawn** (or press `S` / `/`) to add bots. Both routes share the same bot field.
+[http://localhost:3000/demo](http://localhost:3000/demo) is an **independent client-only sandbox**. Click **+ Spawn** (or press `S` / `/`, or Random) to add bots — that is the only way bots appear on `/demo`. It is not connected to Luma, `/admin`, or `/api/bots`, and it does not use `localStorage`. Refresh clears demo bots by design. `/` and `/admin` are unchanged and still share the live store.
 
-`/admin` lists check-ins and can reset the field.
+`/admin` lists check-ins and can reset the live field.
 
 ## Live
 
@@ -23,8 +23,13 @@ Project: `spacexai-grokbot-checkin` on team **Ivo's playground**
 ## How it works
 
 ```
-Demo Spawn UI ──POST /api/bots──────────► in-memory store ──SSE──► kiosk (/ and /demo)
-Luma guest.updated ──POST /api/luma/webhook──► same store
+Live (/):
+  Luma guest.updated ──POST /api/luma/webhook──► in-memory store ──SSE──► kiosk (/)
+  /admin reset ────────────────────────────────► same store
+
+Demo (/demo) — separate, client-only:
+  Spawn button (S, /, Random) ──► createBot() ──► React state + physics
+  (no API, no SSE, no localStorage; refresh clears)
 ```
 
 Client physics (`src/lib/physics.ts`) applies soft float drift, circle–circle elastic bumps, and wall bounce. Name labels ride under avatars but are ignored for hitboxes.
@@ -40,7 +45,7 @@ Client physics (`src/lib/physics.ts`) applies soft float drift, circle–circle 
 
 ## Luma check-in
 
-A checked-in guest on the one configured event spawns a bot on the shared field. The kiosk (`/` and `/demo`) shows that bot through the existing store and SSE stream. There is no separate toast.
+A checked-in guest on the one configured event spawns a bot on the shared live field. The kiosk at `/` shows that bot through the existing store and SSE stream. `/demo` is not on that path. There is no separate toast.
 
 Webhooks need **Luma Plus**. The operator sets the env values in Vercel and creates the webhook in Luma. Do not commit those values. This repo does not contain them, and the agent does not provision them.
 
@@ -48,7 +53,7 @@ Webhooks need **Luma Plus**. The operator sets the env values in Vercel and crea
 
 | Name | Role |
 |------|------|
-| `LUMA_WEBHOOK_SECRET` | Turns the webhook on. Unset or blank → `POST /api/luma/webhook` returns **503**. `/demo` spawn keeps working. |
+| `LUMA_WEBHOOK_SECRET` | Turns the webhook on. Unset or blank → `POST /api/luma/webhook` returns **503**. `/demo` spawn is client-only and does not need this. |
 | `LUMA_EVENT_ID` | The one Luma event. The value is Luma's event id in **`evt_…`** form. When it is set, a payload whose event id is missing or different is ignored. Set it before going live — if it is blank, checked-in guests from every event are admitted. |
 
 Set both on the Vercel project **`spacexai-grokbot-checkin`** (Production, and Preview if a preview should accept the webhook). Copy the signing secret from Luma when the webhook is created. Copy the event id from that event (`evt_…`).
@@ -93,11 +98,11 @@ Secret unset on the server (check 2):
 npm run luma:fixture -- --expect-inactive
 ```
 
-`POST /api/luma/webhook` returns **503**. On localhost the script also `POST /api/bots` to confirm demo spawn still works, then deletes that bot.
+`POST /api/luma/webhook` returns **503**. On localhost the script also `POST /api/bots` to confirm API spawn still works, then deletes that bot.
 
 ## Notes
 
-- Bot list is persisted in the browser via `localStorage` (`spacexai-checkin-bots`) so a refresh or stuck tab reload keeps spawned groks. Live SSE still uses the in-memory server store for multi-tab updates during a warm session.
+- On `/` (and `/admin`), the bot list is persisted in the browser via `localStorage` (`spacexai-checkin-bots`) so a refresh or stuck tab reload keeps spawned groks. Live SSE still uses the in-memory server store for multi-tab updates during a warm session. `/demo` skips persistence entirely — refresh clears its bots.
 - Avatars live in `public/avatars/bot-01.png` … `bot-12.png`.
 - Deploy only to the Vercel project **`spacexai-grokbot-checkin`**.
 <!-- noop: re-trigger Vercel preview for PR #8 -->

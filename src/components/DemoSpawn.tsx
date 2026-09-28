@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { useDemoSpawn } from "@/components/BotField";
 import { randomSampleName } from "@/lib/sample-names";
 
 type Props = {
@@ -8,36 +9,31 @@ type Props = {
 };
 
 export function DemoSpawn({ visible }: Props) {
+  const { spawnLocal } = useDemoSpawn();
   const [name, setName] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [open, setOpen] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
 
-  const spawn = useCallback(async (overrideName?: string) => {
-    const nextName = (overrideName ?? name).trim() || randomSampleName();
-    setBusy(true);
-    setError(null);
-    try {
-      const res = await fetch("/api/bots", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name: nextName }),
-      });
-      if (!res.ok) {
-        const data = (await res.json().catch(() => null)) as
-          | { error?: string }
-          | null;
-        throw new Error(data?.error || "Failed to spawn");
+  const spawn = useCallback(
+    (overrideName?: string) => {
+      const nextName = (overrideName ?? name).trim() || randomSampleName();
+      setBusy(true);
+      setError(null);
+      try {
+        const bot = spawnLocal(nextName);
+        if (!bot) throw new Error("Failed to spawn");
+        setName("");
+        setOpen(false);
+      } catch (err) {
+        setError(err instanceof Error ? err.message : "Failed to spawn");
+      } finally {
+        setBusy(false);
       }
-      setName("");
-      setOpen(false);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to spawn");
-    } finally {
-      setBusy(false);
-    }
-  }, [name]);
+    },
+    [name, spawnLocal],
+  );
 
   useEffect(() => {
     if (!visible) return;
@@ -74,7 +70,7 @@ export function DemoSpawn({ visible }: Props) {
           className="pointer-events-auto flex w-[min(90vw,22rem)] flex-col gap-2 rounded-2xl border border-white/15 bg-[#12151c]/92 px-3 py-3 shadow-[0_18px_50px_rgba(0,0,0,0.45)] backdrop-blur-md"
           onSubmit={(e) => {
             e.preventDefault();
-            void spawn();
+            spawn();
           }}
         >
           <label className="text-[11px] font-medium uppercase tracking-[0.18em] text-white/45">
@@ -99,7 +95,7 @@ export function DemoSpawn({ visible }: Props) {
             <button
               type="button"
               disabled={busy}
-              onClick={() => void spawn(randomSampleName())}
+              onClick={() => spawn(randomSampleName())}
               className="rounded-xl border border-white/15 px-3 py-2 text-sm text-white/80 transition hover:bg-white/5"
             >
               Random

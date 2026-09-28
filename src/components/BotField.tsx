@@ -1,7 +1,17 @@
 "use client";
 
 import Image from "next/image";
-import { useEffect, useMemo, useRef, useState, type RefObject } from "react";
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ReactNode,
+  type RefObject,
+} from "react";
 import { SpawnCloud } from "@/components/SpawnCloud";
 import {
   clearPersistedBots,
@@ -10,6 +20,7 @@ import {
   saveBots,
   upsertPersistedBot,
 } from "@/lib/bot-persistence";
+import { createBot } from "@/lib/create-bot";
 import {
   createBody,
   stepPhysics,
@@ -31,6 +42,20 @@ const CLOUD_HOLD_MS = 320;
 const REVEAL_MS = 520;
 const INTRO_TOTAL_MS = CLOUD_IN_MS + CLOUD_HOLD_MS + REVEAL_MS;
 
+type DemoSpawnContextValue = {
+  spawnLocal: (name: string) => Bot | null;
+};
+
+const DemoSpawnContext = createContext<DemoSpawnContextValue | null>(null);
+
+export function useDemoSpawn(): DemoSpawnContextValue {
+  const value = useContext(DemoSpawnContext);
+  if (!value) {
+    throw new Error("useDemoSpawn must be used within BotField");
+  }
+  return value;
+}
+
 type Props = {
   initialBots?: Bot[];
   /**
@@ -38,6 +63,12 @@ type Props = {
    * Its layout box (not the logo image alone) is the exclusion zone.
    */
   lockupRef?: RefObject<HTMLElement | null>;
+  /**
+   * Client-only sandbox (e.g. `/demo`): no localStorage, no `/api/bots`, no SSE.
+   * Spawns go through `DemoSpawnContext.spawnLocal` into React state + physics only.
+   */
+  ephemeral?: boolean;
+  children?: ReactNode;
 };
 
 /**
@@ -91,7 +122,12 @@ function easeOutCubic(t: number) {
   return 1 - Math.pow(1 - t, 3);
 }
 
-export function BotField({ initialBots = [], lockupRef }: Props) {
+export function BotField({
+  initialBots = [],
+  lockupRef,
+  ephemeral = false,
+  children,
+}: Props) {
   const stageRef = useRef<HTMLDivElement>(null);
   const bodiesRef = useRef<Map<string, PhysicsBody>>(new Map());
   const botsRef = useRef<Map<string, Bot>>(new Map());
@@ -139,7 +175,7 @@ export function BotField({ initialBots = [], lockupRef }: Props) {
     const animateNew = options?.animateNew ?? false;
     const prevIds = new Set(botsRef.current.keys());
     setBots(next);
-    saveBots(next);
+    if (!ephemeral) saveBots(next);
     for (const bot of next) {
       const isNew = !prevIds.has(bot.id) && !bodiesRef.current.has(bot.id);
       ensureBody(bot.id, { animate: animateNew && isNew });
@@ -151,26 +187,47 @@ export function BotField({ initialBots = [], lockupRef }: Props) {
   };
 
   const upsertBot = (bot: Bot) => {
-    upsertPersistedBot(bot);
+    if (!ephemeral) upsertPersistedBot(bot);
     setBots((prev) => {
       if (prev.some((b) => b.id === bot.id)) return prev;
       const next = [...prev, bot];
-      saveBots(next);
+      if (!ephemeral) saveBots(next);
       return next;
     });
     ensureBody(bot.id, { animate: true });
   };
 
+  const spawnLocal = useCallback(
+    (name: string): Bot | null => {
+      const bot = createBot(name);
+      if (!bot) return null;
+      setBots((prev) => {
+        if (prev.some((b) => b.id === bot.id)) return prev;
+        return [...prev, bot];
+      });
+      ensureBody(bot.id, { animate: true });
+      return bot;
+    },
+    // ensureBody closes over refs; stable for the field lifetime.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [],
+  );
+
+  const demoSpawnValue = useMemo(() => ({ spawnLocal }), [spawnLocal]);
+
   // Restore from localStorage first so a stuck/refreshed browser keeps groks.
   useEffect(() => {
+    if (ephemeral) return;
     const persisted = loadBots();
     if (persisted.length === 0) return;
     setBots(persisted);
     for (const bot of persisted) ensureBody(bot.id, { animate: false });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [ephemeral]);
 
   useEffect(() => {
+    if (ephemeral) return;
+
     let cancelled = false;
     let source: EventSource | null = null;
     let retryTimer: ReturnType<typeof setTimeout> | null = null;
@@ -224,7 +281,7 @@ export function BotField({ initialBots = [], lockupRef }: Props) {
       if (retryTimer) clearTimeout(retryTimer);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [ephemeral]);
 
   useEffect(() => {
     const loop = (ts: number) => {
@@ -280,74 +337,77 @@ export function BotField({ initialBots = [], lockupRef }: Props) {
   const rendered = Array.from(botMap.values());
 
   return (
-    <div ref={stageRef} className="absolute inset-0 overflow-hidden">
-      {rendered.map((bot) => {
-        const body = bodiesRef.current.get(bot.id);
-        if (!body) return null;
+    <DemoSpawnContext.Provider value={demoSpawnValue}>
+      <div ref={stageRef} className="absolute inset-0 overflow-hidden">
+        {rendered.map((bot) => {
+          const body = bodiesRef.current.get(bot.id);
+          if (!body) return null;
 
-        const age = performance.now() - body.bornAt;
-        const cloudIn = easeOutBack(clamp01(age / CLOUD_IN_MS));
-        const inHold = age > CLOUD_IN_MS;
-        const holdAge = Math.max(0, age - CLOUD_IN_MS);
-        const pulse =
-          inHold && age < CLOUD_IN_MS + CLOUD_HOLD_MS
-            ? Math.sin((holdAge / CLOUD_HOLD_MS) * Math.PI) * 0.35
-            : 0;
-        const revealT = easeOutCubic(
-          clamp01((age - CLOUD_IN_MS - CLOUD_HOLD_MS * 0.35) / REVEAL_MS),
-        );
-        const cloudFade = clamp01(
-          (age - CLOUD_IN_MS - CLOUD_HOLD_MS * 0.2) / (REVEAL_MS * 0.85),
-        );
-        const showCloud = age < INTRO_TOTAL_MS && cloudFade < 1;
-        const grokScale = 0.55 + revealT * 0.45;
-        const grokOpacity = revealT;
-        const nameOpacity = clamp01((revealT - 0.35) / 0.65);
+          const age = performance.now() - body.bornAt;
+          const cloudIn = easeOutBack(clamp01(age / CLOUD_IN_MS));
+          const inHold = age > CLOUD_IN_MS;
+          const holdAge = Math.max(0, age - CLOUD_IN_MS);
+          const pulse =
+            inHold && age < CLOUD_IN_MS + CLOUD_HOLD_MS
+              ? Math.sin((holdAge / CLOUD_HOLD_MS) * Math.PI) * 0.35
+              : 0;
+          const revealT = easeOutCubic(
+            clamp01((age - CLOUD_IN_MS - CLOUD_HOLD_MS * 0.35) / REVEAL_MS),
+          );
+          const cloudFade = clamp01(
+            (age - CLOUD_IN_MS - CLOUD_HOLD_MS * 0.2) / (REVEAL_MS * 0.85),
+          );
+          const showCloud = age < INTRO_TOTAL_MS && cloudFade < 1;
+          const grokScale = 0.55 + revealT * 0.45;
+          const grokOpacity = revealT;
+          const nameOpacity = clamp01((revealT - 0.35) / 0.65);
 
-        return (
-          <div
-            key={bot.id}
-            className="pointer-events-none absolute"
-            style={{
-              left: body.x,
-              top: body.y,
-              width: AVATAR_SIZE,
-              height: AVATAR_SIZE,
-              transform: "translate(-50%, -50%)",
-              willChange: "transform, left, top",
-            }}
-          >
-            {showCloud && (
-              <SpawnCloud appear={cloudIn} fadeOut={cloudFade} pulse={pulse} />
-            )}
-
+          return (
             <div
-              className="absolute inset-0"
+              key={bot.id}
+              className="pointer-events-none absolute"
               style={{
-                transform: `scale(${grokScale})`,
-                opacity: grokOpacity,
+                left: body.x,
+                top: body.y,
+                width: AVATAR_SIZE,
+                height: AVATAR_SIZE,
+                transform: "translate(-50%, -50%)",
+                willChange: "transform, left, top",
               }}
             >
-              <Image
-                src={bot.avatar}
-                alt=""
-                width={AVATAR_SIZE}
-                height={AVATAR_SIZE}
-                className="h-full w-full object-contain drop-shadow-[0_10px_24px_rgba(0,0,0,0.35)]"
-                priority={false}
-                unoptimized
-              />
-            </div>
+              {showCloud && (
+                <SpawnCloud appear={cloudIn} fadeOut={cloudFade} pulse={pulse} />
+              )}
 
-            <span
-              className="absolute left-1/2 top-[calc(100%+2px)] w-[120px] -translate-x-1/2 truncate text-center text-[13px] font-medium tracking-wide text-white/90 [text-shadow:0_1px_8px_rgba(0,0,0,0.85)]"
-              style={{ opacity: nameOpacity }}
-            >
-              {bot.name}
-            </span>
-          </div>
-        );
-      })}
-    </div>
+              <div
+                className="absolute inset-0"
+                style={{
+                  transform: `scale(${grokScale})`,
+                  opacity: grokOpacity,
+                }}
+              >
+                <Image
+                  src={bot.avatar}
+                  alt=""
+                  width={AVATAR_SIZE}
+                  height={AVATAR_SIZE}
+                  className="h-full w-full object-contain drop-shadow-[0_10px_24px_rgba(0,0,0,0.35)]"
+                  priority={false}
+                  unoptimized
+                />
+              </div>
+
+              <span
+                className="absolute left-1/2 top-[calc(100%+2px)] w-[120px] -translate-x-1/2 truncate text-center text-[13px] font-medium tracking-wide text-white/90 [text-shadow:0_1px_8px_rgba(0,0,0,0.85)]"
+                style={{ opacity: nameOpacity }}
+              >
+                {bot.name}
+              </span>
+            </div>
+          );
+        })}
+      </div>
+      {children}
+    </DemoSpawnContext.Provider>
   );
 }
