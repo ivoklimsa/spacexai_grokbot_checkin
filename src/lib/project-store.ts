@@ -1,10 +1,6 @@
-import { neon, type NeonQueryFunction } from "@neondatabase/serverless";
 import type { ProjectInput } from "@/lib/project-input";
 import type { Project } from "@/lib/types";
-
-const QUERY_TIMEOUT_MS = 8000;
-
-type Sql = NeonQueryFunction<false, false>;
+import { getSql, isDatabaseConfigured, safeDbError, type Sql } from "@/lib/db";
 
 type ProjectRow = {
   id: unknown;
@@ -79,34 +75,18 @@ export async function createProject(input: ProjectInput): Promise<Project> {
 }
 
 async function withSql<T>(run: (sql: Sql) => Promise<T>): Promise<T> {
+  if (!isDatabaseConfigured()) {
+    throw new ProjectStoreError("Project store is not configured", 503);
+  }
   try {
     const sql = getSql();
     await ensureSchema(sql);
     return await run(sql);
   } catch (error) {
     if (error instanceof ProjectStoreError) throw error;
-    console.error("Project store request failed", safeError(error));
+    console.error("Project store request failed", safeDbError(error));
     throw new ProjectStoreError("Project store request failed", 502);
   }
-}
-
-function getSql(): Sql {
-  return neon(databaseUrl(), {
-    fetchOptions: {
-      cache: "no-store",
-      signal: AbortSignal.timeout(QUERY_TIMEOUT_MS),
-    },
-  });
-}
-
-function databaseUrl(): string {
-  const pooled = clean(process.env.DATABASE_URL_POOLED);
-  const direct = clean(process.env.DATABASE_URL);
-  const url = pooled || direct;
-  if (!url) {
-    throw new ProjectStoreError("Project store is not configured", 503);
-  }
-  return url;
 }
 
 function ensureSchema(sql: Sql): Promise<void> {
@@ -163,14 +143,4 @@ function toIso(value: unknown): string | null {
     if (!Number.isNaN(date.getTime())) return date.toISOString();
   }
   return null;
-}
-
-function clean(value: string | undefined): string {
-  return value?.trim() ?? "";
-}
-
-function safeError(error: unknown): string {
-  const message = error instanceof Error ? error.message : "error";
-  if (/postgres(ql)?:\/\//i.test(message)) return "database error";
-  return message;
 }

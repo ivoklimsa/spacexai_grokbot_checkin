@@ -73,6 +73,6 @@ export async function POST(request: Request) {
     );
   }
 
-  const bot = spawnBot({ id, name });
+  const bot = await spawnBot({ id, name });
   return NextResponse.json({ ok: true, bot });
 }
