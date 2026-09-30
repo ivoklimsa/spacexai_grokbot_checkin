@@ -231,10 +231,21 @@ export function BotField({
     let cancelled = false;
     let source: EventSource | null = null;
     let retryTimer: ReturnType<typeof setTimeout> | null = null;
+    let pollTimer: ReturnType<typeof setInterval> | null = null;
 
     const mergeIncoming = (incoming: Bot[]) => {
       const merged = mergeBots(loadBots(), incoming);
       applyBotList(merged, { animateNew: false });
+    };
+
+    const pullBots = () => {
+      void fetch("/api/bots", { cache: "no-store" })
+        .then((r) => r.json())
+        .then((data: { bots?: Bot[] }) => {
+          if (cancelled || !data.bots) return;
+          mergeIncoming(data.bots);
+        })
+        .catch(() => undefined);
     };
 
     const connect = () => {
@@ -265,20 +276,17 @@ export function BotField({
       };
     };
 
-    void fetch("/api/bots")
-      .then((r) => r.json())
-      .then((data: { bots?: Bot[] }) => {
-        if (cancelled || !data.bots) return;
-        mergeIncoming(data.bots);
-      })
-      .catch(() => undefined);
-
+    pullBots();
     connect();
+    // Poll Neon-backed list so a webhook on another instance still lands
+    // even if this tab's SSE instance is slow to reconcile.
+    pollTimer = setInterval(pullBots, 3000);
 
     return () => {
       cancelled = true;
       source?.close();
       if (retryTimer) clearTimeout(retryTimer);
+      if (pollTimer) clearInterval(pollTimer);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [ephemeral]);

@@ -26,8 +26,9 @@ Project: `spacexai-grokbot-checkin` on team **Ivo's playground**
 
 ```
 Live (/):
-  Luma guest.updated ──POST /api/luma/webhook──► in-memory store ──SSE──► kiosk (/)
-  /admin Reset ──► same store (check-ins) and DELETE /api/projects (all Neon rows)
+  Luma guest.updated ──POST /api/luma/webhook──► Neon `bots` table ──SSE──► kiosk (/)
+  /admin Reset ──► DELETE bots + DELETE /api/projects (all Neon rows)
+  (Without DATABASE_URL, bots fall back to process memory — fine for local only.)
 
 Demo (/demo) — separate, client-only:
   Spawn button (S, /, Random) ──► createBot() ──► React state + physics
@@ -36,7 +37,7 @@ Demo (/demo) — separate, client-only:
 Projects (/project):
   Form ──POST /api/projects──► Neon Postgres
   List ◄──GET /api/projects───
-  Participant names ◄──GET /api/bots (suggest only; bots stay in memory)
+  Participant names ◄──GET /api/bots (suggest only)
 ```
 
 Client physics (`src/lib/physics.ts`) applies soft float drift, circle–circle elastic bumps, and wall bounce. Name labels ride under avatars but are ignored for hitboxes.
@@ -59,11 +60,11 @@ Client physics (`src/lib/physics.ts`) applies soft float drift, circle–circle 
 
 The participant field suggests names from the current check-in list (`GET /api/bots`, `Bot[].name`) when that list has names. A name that is not checked in can still be typed. If the bot list is empty, the field is plain text.
 
-Each record is `{ id, projectName, participant?, githubUrl?, webUrl?, createdAt }`. Rows live in the Postgres table `projects`. They are not stored in `localStorage` or the in-memory bot map.
+Each record is `{ id, projectName, participant?, githubUrl?, webUrl?, createdAt }`. Rows live in the Postgres table `projects`. They are not stored in `localStorage`. Check-ins live in the separate `bots` table (same database).
 
 Optional GitHub and web values are stored as entered. Values that start with `http://` or `https://` are shown as links.
 
-The `projects` table is created on first use (`CREATE TABLE IF NOT EXISTS`). No manual migration is required.
+The `projects` and `bots` tables are created on first use (`CREATE TABLE IF NOT EXISTS`). No manual migration is required.
 
 ### Env vars (names only)
 
@@ -76,7 +77,9 @@ The client is `@neondatabase/serverless`. On the Vercel project **`spacexai-grok
 
 When both are set, queries use `DATABASE_URL_POOLED`. When only one is set, that one is used.
 
-If neither name is set, `GET`, `POST`, and `DELETE /api/projects` return **503** with `Project store is not configured`.
+The same URL backs live check-ins (`bots` table) and project registrations (`projects` table). Both tables are created on first use (`CREATE TABLE IF NOT EXISTS`).
+
+If neither name is set, `GET`, `POST`, and `DELETE /api/projects` return **503** with `Project store is not configured`. Check-in APIs still work in process memory (local `next dev`), but that store is **not** shared across Vercel serverless instances — production needs the Neon URL so Luma webhooks and the kiosk see the same bots.
 
 ## Luma check-in
 
@@ -137,7 +140,7 @@ npm run luma:fixture -- --expect-inactive
 
 ## Notes
 
-- On `/` (and `/admin`), the bot list is persisted in the browser via `localStorage` (`spacexai-checkin-bots`) so a refresh or stuck tab reload keeps spawned groks. Live SSE still uses the in-memory server store for multi-tab updates during a warm session. `/demo` skips persistence entirely — refresh clears its bots. `/project` does not use that key.
+- On `/` (and `/admin`), the bot list is also cached in the browser via `localStorage` (`spacexai-checkin-bots`) so a refresh keeps groks while SSE reconnects. The durable source of truth on production is Neon (`bots`). Open SSE connections re-read Neon every ~2s so a webhook that landed on another instance still appears. `/demo` skips persistence entirely — refresh clears its bots. `/project` does not use that key.
 - Avatars live in `public/avatars/bot-01.png` … `bot-12.png`.
 - Deploy only to the Vercel project **`spacexai-grokbot-checkin`**.
 <!-- noop: re-trigger Vercel preview for PR #8 -->

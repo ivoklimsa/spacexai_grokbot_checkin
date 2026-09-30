@@ -24,7 +24,8 @@
  * `--expect-inactive` expects POST /api/luma/webhook → 503 (secret unset)
  * and, on localhost, that POST /api/bots still spawns.
  *
- * The default run calls DELETE /api/bots first (clears the in-memory field).
+ * The default run calls DELETE /api/bots first (clears the shared field —
+ * Neon `bots` when DATABASE_URL is set, otherwise process memory).
  * Non-localhost hosts require `--allow-reset`.
  */
 
